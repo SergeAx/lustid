@@ -2,6 +2,9 @@ package lustid
 
 import (
 	"crypto/rand"
+	"encoding/binary"
+	"encoding/hex"
+	"fmt"
 	mrand "math/rand/v2"
 	"sync"
 	"time"
@@ -72,6 +75,53 @@ func New() ID {
 	}
 
 	return ID((tick << counterBits) | counter)
+}
+
+// String returns the ID as a 16-character lowercase hexadecimal string (e.g. "00e3f1a2b4c5d6e7").
+func (id ID) String() string {
+	var b [8]byte
+	binary.BigEndian.PutUint64(b[:], uint64(id))
+	return hex.EncodeToString(b[:])
+}
+
+// Parse decodes a hex string produced by String() back into an ID.
+func Parse(s string) (ID, error) {
+	if len(s) != 16 {
+		return 0, fmt.Errorf("lustid: hex string must be 16 characters, got %d", len(s))
+	}
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		return 0, fmt.Errorf("lustid: invalid hex string: %w", err)
+	}
+	v := binary.BigEndian.Uint64(b)
+	if v >= 0x8000000000000000 {
+		return 0, fmt.Errorf("lustid: sign bit must not be set")
+	}
+	return ID(v), nil
+}
+
+// MustParse is like Parse but panics on error. Intended for tests and hardcoded IDs.
+func MustParse(s string) ID {
+	id, err := Parse(s)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
+// MarshalText implements encoding.TextMarshaler. The text form is the same as String().
+func (id ID) MarshalText() ([]byte, error) {
+	return []byte(id.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler. It accepts the hex form produced by MarshalText.
+func (id *ID) UnmarshalText(b []byte) error {
+	v, err := Parse(string(b))
+	if err != nil {
+		return err
+	}
+	*id = v
+	return nil
 }
 
 // Timestamp returns the creation time encoded in the ID, truncated to 4 ms precision.

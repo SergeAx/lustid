@@ -1,6 +1,7 @@
 package lustid
 
 import (
+	"encoding/json"
 	"sync"
 	"testing"
 	"time"
@@ -128,6 +129,118 @@ func TestNew_MonotonicConcurrentPerGoroutine(t *testing.T) {
 				t.Fatalf("goroutine %d: non-monotonic at i=%d: %d <= %d", g, i, ids[i], ids[i-1])
 			}
 		}
+	}
+}
+
+func TestString_Format(t *testing.T) {
+	id := New()
+	s := id.String()
+	if len(s) != 16 {
+		t.Fatalf("String() len = %d, want 16: %q", len(s), s)
+	}
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			t.Fatalf("String() contains non-hex char %q: %s", c, s)
+		}
+	}
+}
+
+func TestParse_RoundTrip(t *testing.T) {
+	id := New()
+	got, err := Parse(id.String())
+	if err != nil {
+		t.Fatalf("Parse(%q) error: %v", id.String(), err)
+	}
+	if got != id {
+		t.Fatalf("round-trip mismatch: got %d, want %d", got, id)
+	}
+}
+
+func TestParse_Errors(t *testing.T) {
+	cases := []string{"", "abc", "gg00000000000000", "00000000000000000", "8000000000000000"}
+	for _, s := range cases {
+		if _, err := Parse(s); err == nil {
+			t.Errorf("Parse(%q) expected error, got nil", s)
+		}
+	}
+}
+
+func TestMustParse_Valid(t *testing.T) {
+	id := New()
+	if got := MustParse(id.String()); got != id {
+		t.Fatalf("MustParse round-trip: got %v, want %v", got, id)
+	}
+}
+
+func TestMustParse_Panics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("MustParse did not panic on invalid input")
+		}
+	}()
+	MustParse("invalid")
+}
+
+func TestMarshalText_RoundTrip(t *testing.T) {
+	id := New()
+	b, err := id.MarshalText()
+	if err != nil {
+		t.Fatalf("MarshalText: %v", err)
+	}
+	var got ID
+	if err := got.UnmarshalText(b); err != nil {
+		t.Fatalf("UnmarshalText: %v", err)
+	}
+	if got != id {
+		t.Fatalf("round-trip mismatch: got %v, want %v", got, id)
+	}
+}
+
+func TestUnmarshalText_Errors(t *testing.T) {
+	cases := []string{"", "abc", "gg00000000000000", "8000000000000000"}
+	for _, s := range cases {
+		var id ID
+		if err := id.UnmarshalText([]byte(s)); err == nil {
+			t.Errorf("UnmarshalText(%q) expected error, got nil", s)
+		}
+	}
+}
+
+func TestJSON_RoundTrip(t *testing.T) {
+	id := New()
+	b, err := json.Marshal(id)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	want := `"` + id.String() + `"`
+	if string(b) != want {
+		t.Fatalf("json.Marshal = %s, want %s", b, want)
+	}
+	var got ID
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+	if got != id {
+		t.Fatalf("JSON round-trip mismatch: got %v, want %v", got, id)
+	}
+}
+
+func TestJSON_InStruct(t *testing.T) {
+	type row struct {
+		ID   ID     `json:"id"`
+		Name string `json:"name"`
+	}
+	in := row{ID: New(), Name: "test"}
+	b, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	var out row
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+	if out.ID != in.ID || out.Name != in.Name {
+		t.Fatalf("struct round-trip mismatch: got %+v, want %+v", out, in)
 	}
 }
 
