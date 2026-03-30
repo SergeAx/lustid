@@ -138,7 +138,7 @@ import (
 
 func main() {
     id := lustid.New()
-    fmt.Println(id)            // e.g. 4144876327913481234
+    fmt.Println(id)            // e.g. 00e3f1a2b4c5d6e7
     fmt.Println(id.Timestamp()) // e.g. 2026-03-28 14:23:01.234 +0000 UTC
 }
 ```
@@ -175,7 +175,7 @@ func Middleware(next http.Handler) http.Handler {
         // generate one otherwise.
         traceID := r.Header.Get("X-Trace-Id")
         if traceID == "" {
-            traceID = strconv.FormatInt(int64(lustid.New()), 10)
+            traceID = lustid.New().String() // e.g. "00e3f1a2b4c5d6e7"
         }
         ctx := context.WithValue(r.Context(), traceKey, traceID)
         w.Header().Set("X-Trace-Id", traceID)
