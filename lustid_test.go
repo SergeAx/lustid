@@ -165,6 +165,38 @@ func TestParse_Errors(t *testing.T) {
 	}
 }
 
+func TestNew_CounterExhaustion(t *testing.T) {
+	// Force counter to the top of the space so any step will wrap.
+	mu.Lock()
+	now := time.Now().UnixMilli()
+	savedLastTick := lastTick
+	savedCounter := counter
+	lastTick = (now - CustomEpochMs) / tickMs
+	counter = counterMask
+	mu.Unlock()
+	defer func() {
+		mu.Lock()
+		lastTick = savedLastTick
+		counter = savedCounter
+		mu.Unlock()
+	}()
+
+	id := New()
+
+	if int64(id) < 0 {
+		t.Fatalf("negative ID after counter exhaustion: %v", id)
+	}
+	// The ID must have come from a fresh tick; verify subsequent IDs are still monotonic.
+	prev := id
+	for range 10 {
+		cur := New()
+		if cur <= prev {
+			t.Fatalf("non-monotonic after counter exhaustion: %v <= %v", cur, prev)
+		}
+		prev = cur
+	}
+}
+
 func TestMustParse_Valid(t *testing.T) {
 	id := New()
 	if got := MustParse(id.String()); got != id {

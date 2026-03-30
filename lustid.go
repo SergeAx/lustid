@@ -62,16 +62,17 @@ func New() ID {
 	} else {
 		// Same tick: advance by a random step (1-8) to obscure within-tick volume.
 		step := (randomInt64() & 0x7) + 1
-		counter = (counter + step) & counterMask
+		newCounter := (counter + step) & counterMask
 
 		// Counter exhausted. This should never happen at normal throughput
-		// (~8 million IDs per 4 ms window). Wait for the next tick.
-		if counter < step {
+		// (~1.86 million IDs per 4 ms window on average, given a mean step of 4.5). Wait for the next tick.
+		if newCounter < counter {
 			time.Sleep(time.Duration(tickMs) * time.Millisecond)
 			tick = (time.Now().UnixMilli() - CustomEpochMs) / tickMs
 			lastTick = tick
-			counter = randomInt64() & counterMask
+			newCounter = randomInt64() & counterMask
 		}
+		counter = newCounter
 	}
 
 	return ID((tick << counterBits) | counter)
